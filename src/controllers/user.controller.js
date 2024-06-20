@@ -13,6 +13,8 @@ const generateAccessAndRefreshToken = async (userId) => {
     user.refreshToken = refreshToken
     await user.save({ validateBeforeSave: false })
 
+    return { accessToken, refreshToken }
+
   } catch (error) {
     res.status(500).json({
       message: 'An error occurred while generating access and refresh token',
@@ -151,10 +153,23 @@ const loginUser = async (req, res, next) => {
 
     const loggedInUser = await User.findById(user._id).select('-password -refreshToken')
 
-    //send cookies with access token and refresh token
+    //send access token and refresh token in cookies 
 
-    // Asynchronous operations (if any) would go here
-    // get user details from front end
+    const options = {
+      httpOnly: true,
+      secure: true,
+    }
+
+    return res.status(200)
+      .cookie('accessToken', accessToken, options)
+      .cookie('refreshToken', refreshToken, options)
+      .json({
+        message: 'User logged in successfully',
+        user: loggedInUser,
+        accessToken,
+        refreshToken,
+      })
+
   }
 
   catch (error) {
@@ -165,4 +180,32 @@ const loginUser = async (req, res, next) => {
 
   }
 }
-export default registerUser
+const logOutUser = async (req, res, next) => {
+  User.findByIdAndUpdate(req.user._id,
+    {
+      $set: {
+        refreshToken: '',
+      },
+
+    },
+    {
+      new: true,
+    }
+  )
+  const options = {
+    httpOnly: true,
+    secure: true,
+  }
+  return res.status(200)
+    .cookie('accessToken', '', options)
+    .cookie('refreshToken', '', options)
+    .json({
+      message: 'User logged out successfully',
+    })
+}
+
+export {
+  registerUser,
+  loginUser,
+
+}
