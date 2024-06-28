@@ -261,10 +261,105 @@ const changeCurrentPassword = async (req, res, next) => {
   }
 }
 
+const generateCurrentUser = async (req, res, next) => {
+
+  const user = await User.findById(req.user?._id).select('-password -refreshToken')
+
+  return res
+    .status(200)
+    .json({
+      message: 'Current user generated successfully',
+      user,
+    })
+}
+
+const updateAccount = async (req, res, next) => {
+
+  const { fullName, username, email, role, profileImg, coverImage } = req.body
+
+  if (!fullName || !username || !email || !role) {
+    return res.status(400).json({
+      message: 'Please provide all the details',
+    })
+  }
+
+  const user = await User.findById(
+    req.user?._id,
+    {
+      $set: {
+        fullName,
+        username,
+        email,
+        role,
+        profileImg,
+        coverImage
+      }
+    },
+    { new: true }
+  ).select('-password')
+
+}
+
+const updateProfileImg = async (req, res, next) => {
+  const profileImgPath = req.file?.path
+
+  if (!profileImgPath) {
+    return res.status(400).json({
+      message: 'Please provide profile image',
+    })
+  }
+  const profileImg = await uploadOnCLoudinary(profileImgPath)
+
+  if (!profileImg.url) {
+    return res.status(400).json({
+      message: 'Error uploading profile image',
+    })
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        profileImg: profileImg.url
+      }
+    },
+    { new: true }
+  ).select('-password')
+
+}
+
+const updateCoverImage = async (req, res, next) => {
+  const coverImgPath = req.file?.path
+  if (!coverImgPath) {
+    return res.status(400).json({
+      message: 'Please provide cover image',
+    })
+  }
+  const coverImg = await uploadOnCLoudinary(coverImgPath)
+  if (!coverImg.url) {
+    return res.status(400).json({
+      message: 'Error uploading cover image',
+    })
+  }
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        coverImage: coverImg.url
+      }
+    },
+    { new: true }
+  ).select('-password')
+}
+
 export {
   registerUser,
   loginUser,
   logOutUser,
   refreshAccessToken,
-  changeCurrentPassword
+  changeCurrentPassword,
+  generateCurrentUser,
+  updateAccount,
+  updateProfileImg,
+  updateCoverImage,
 }
