@@ -1,11 +1,9 @@
 import { User } from '../models/user.model.js'
 import uploadOnCLoudinary from '../utils/cloudinary.js'
+import jwt from 'jsonwebtoken'
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
-    // Asynchronous operations (if any) would go here
-    // generate access token
-
     const user = await User.findById(userId)
     const accessToken = user.generateAccessToken()
     const refreshToken = user.generateRefreshToken()
@@ -14,41 +12,23 @@ const generateAccessAndRefreshToken = async (userId) => {
     await user.save({ validateBeforeSave: false })
 
     return { accessToken, refreshToken }
-
   } catch (error) {
-    res.status(500).json({
-      message: 'An error occurred while generating access and refresh token',
-    })
+    console.error('Error generating tokens:', error)
+    throw new Error('An error occurred while generating access and refresh token')
   }
 }
 
 const registerUser = async (req, res, next) => {
   try {
-    // Asynchronous operations (if any) would go here
-    // get user details from front end
     const { fullName, username, email, password, role } = req.body
-    console.log('email' + email)
 
-    // validation of user details
     if (!fullName || !username || !email || !password || !role) {
       return res.status(400).json({
         message: 'Please provide all the details',
       })
     }
-    //or
-    // if ([fullName, username, email, password, role].some(value => value?.trim() === '')) {
-    //   return res.status(400).json({
-    //     message: 'Please provide all the details',
-    //   });
-    // }
 
-    // check if user already exists in database - check with username and email
-
-    const existedUser = await User.findOne(
-      {
-        $or: [{ username }, { email }]
-      }
-    )
+    const existedUser = await User.findOne({ $or: [{ username }, { email }] })
 
     if (existedUser) {
       return res.status(400).json({
@@ -56,10 +36,9 @@ const registerUser = async (req, res, next) => {
       })
     }
 
-    // check for profile image
     const profileImgPath = req.files?.profileImg[0]?.path
 
-    let coverImgPath;
+    let coverImgPath
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
       coverImgPath = req.files.coverImage[0].path
     }
@@ -70,16 +49,15 @@ const registerUser = async (req, res, next) => {
       })
     }
 
-    //uploading to cloudinary server
     const profileImg = await uploadOnCLoudinary(profileImgPath)
     const coverImg = await uploadOnCLoudinary(coverImgPath)
+
     if (!profileImg) {
       return res.status(400).json({
         message: 'Please provide valid profile image',
       })
     }
 
-    // create a new user in database
     const user = await User.create({
       fullName,
       username: username.toLowerCase(),
@@ -90,26 +68,21 @@ const registerUser = async (req, res, next) => {
       coverImage: coverImg?.url || '',
     })
 
-    //remove password and refresh token from the response
-    // check if user is created
     const userCreated = await User.findById(user._id).select('-password -refreshToken')
+
     if (!userCreated) {
       return res.status(400).json({
         message: 'User not created',
       })
     }
 
-    //return response
     return res.status(201).json({
       message: 'User created successfully',
       user: userCreated,
     })
-
   } catch (error) {
-    // If an error occurs during the execution of asynchronous operations
-    // Handle the error and send an appropriate reesponse
-    console.error(error) // Log the error for debugging purposes
-    res.status(500).json({
+    console.error('Error registering user:', error)
+    return res.status(500).json({
       message: 'An error occurred while registering user',
     })
   }
@@ -117,29 +90,22 @@ const registerUser = async (req, res, next) => {
 
 const loginUser = async (req, res, next) => {
   try {
-    //get data from req data
     const { email, password, username } = req.body
+
     if (!email || !password) {
       return res.status(400).json({
         message: 'Please provide email and password',
       })
     }
 
-    //username or email can be used to login
-    const user = await User.findOne(
-      {
-        $or: [{ username }, { email }]
-      }
-    )
+    const user = await User.findOne({ $or: [{ username }, { email }] })
 
-    //check if user exists in database
     if (!user) {
       return res.status(400).json({
         message: 'User not found',
       })
     }
 
-    //check the password with the one in database
     const isPasswordCorrect = await user.isPasswordMatch(password)
 
     if (!isPasswordCorrect) {
@@ -148,12 +114,8 @@ const loginUser = async (req, res, next) => {
       })
     }
 
-    //access token and refresh token should be generated
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id)
-
     const loggedInUser = await User.findById(user._id).select('-password -refreshToken')
-
-    //send access token and refresh token in cookies 
 
     const options = {
       httpOnly: true,
@@ -169,43 +131,140 @@ const loginUser = async (req, res, next) => {
         accessToken,
         refreshToken,
       })
-
-  }
-
-  catch (error) {
-    // If an error occurs during the execution of asynchronous operations
-
-    // Handle the error and send an appropriate reesponse
-    console.log(error) // Log the error for debugging purposes
-
+  } catch (error) {
+    console.error('Error logging in user:', error)
+    return res.status(500).json({
+      message: 'An error occurred while logging in',
+    })
   }
 }
-const logOutUser = async (req, res, next) => {
-  User.findByIdAndUpdate(req.user._id,
-    {
-      $set: {
-        refreshToken: '',
-      },
 
-    },
-    {
-      new: true,
+const logOutUser = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'User not authenticated',
+      })
     }
-  )
-  const options = {
-    httpOnly: true,
-    secure: true,
-  }
-  return res.status(200)
-    .cookie('accessToken', '', options)
-    .cookie('refreshToken', '', options)
-    .json({
-      message: 'User logged out successfully',
+
+    await User.findByIdAndUpdate(req.user._id, { $set: { refreshToken: '' } }, { new: true })
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+      expires: new Date(0),
+    }
+
+    return res.status(200)
+      .cookie('accessToken', '', options)
+      .cookie('refreshToken', '', options)
+      .json({
+        message: 'User logged out successfully',
+      })
+  } catch (error) {
+    console.error('Error logging out user:', error)
+    return res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while logging out',
     })
+  }
+}
+
+const refreshAccessToken = async (req, res, next) => {
+  try {
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+    if (!incomingRefreshToken) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Access denied. Please login',
+      })
+    }
+
+    const decodedRefreshToken = jwt.verify(incomingRefreshToken, 'i8sRE0kKjlUrbkEy1FeQFdLzcqzSU6A21iDTtPmqulub2s8HPIZmA9Gy4M2L8DR3V7BOpp4JzrK3QEyCl7OgaUHhF7a1zAQpDR9WuYJRvOAqLx7ktRI3DCcG')
+
+    const user = await User.findById(decodedRefreshToken?._id)
+
+    if (!user) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Access denied. Invalid Refresh Token',
+      })
+    }
+
+    if (incomingRefreshToken !== user.refreshToken) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Access denied. Refresh Token does not match',
+      })
+    }
+
+    const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(user._id)
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+    }
+
+    return res.status(200)
+      .cookie('accessToken', accessToken, options)
+      .cookie('refreshToken', newRefreshToken, options)
+      .json({
+        message: 'Access token refreshed successfully',
+        accessToken,
+        newRefreshToken,
+      })
+  } catch (error) {
+    console.error('Error refreshing access token:', error)
+    return res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while refreshing access token',
+    })
+  }
+}
+
+const changeCurrentPassword = async (req, res, next) => {
+  try {
+    const { oldPassword, newPassword } = req.body
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide old password and new password',
+      })
+    }
+
+    const user = await User.findById(req.user?._id)
+
+    const isPasswordCorrect = await user.isPasswordMatch(oldPassword)
+
+    if (!isPasswordCorrect) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Incorrect password',
+      })
+    }
+
+    user.password = newPassword
+    await user.save({ validateBeforeSave: false })
+
+    return res.status(200).json({
+      message: 'Password changed successfully',
+    })
+  } catch (error) {
+    console.error('Error changing password:', error)
+    return res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while changing password',
+    })
+  }
 }
 
 export {
   registerUser,
   loginUser,
-
+  logOutUser,
+  refreshAccessToken,
+  changeCurrentPassword
 }

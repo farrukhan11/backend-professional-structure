@@ -1,6 +1,6 @@
-import mongoose from 'mongoose'
-import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 const userSchema = new mongoose.Schema(
   {
@@ -21,13 +21,13 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true, //to make any field searchable in mongodb, to search in database
+      index: true,
     },
     fullName: {
       type: String,
       required: true,
       trim: true,
-      index: true, //to make any field searchable in mongodb, to search in database
+      index: true,
     },
     role: {
       type: String,
@@ -35,11 +35,11 @@ const userSchema = new mongoose.Schema(
       default: 'user',
     },
     profileImg: {
-      type: String, //cloudinary URL
+      type: String,
       required: true,
     },
     coverImg: {
-      type: String, //cloudinary URL
+      type: String,
     },
     refreshToken: {
       type: String,
@@ -48,23 +48,23 @@ const userSchema = new mongoose.Schema(
   {
     timestamps: true,
   },
-)
+);
 
 userSchema.pre('save', async function (next) {
-  const user = this
+  const user = this;
   if (user.isModified('password')) {
-    user.password = await bcrypt.hash(user.password, 10)
+    user.password = await bcrypt.hash(user.password, 10);
   }
-  next()
-})
+  next();
+});
 
-userSchema.method.isPasswordMatch = async function (password) {
-  const user = this
-  return await bcrypt.compare(password, user.password)
-}
+userSchema.methods.isPasswordMatch = async function (password) {
+  const user = this;
+  return await bcrypt.compare(password, user.password);
+};
 
-userSchema.method.generateAccessToken = async function () {
-  const user = this
+userSchema.methods.generateAccessToken = function () {
+  const user = this;
   const token = jwt.sign(
     {
       _id: user._id,
@@ -72,17 +72,22 @@ userSchema.method.generateAccessToken = async function () {
       username: user.username,
       email: user.email,
     },
-    process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
-  )
-}
-userSchema.method.generateRefreshToken = async function () {
-  const user = this
+    'UVa5eLZyBmLLbtyIFAD4BM4PYBXiFRsCrjW5pdUvGYG9Xmwtv3xjQO8mXyovp6mYJ9gBlIyQ45seD2POIyr9PU2jedogCRLcW31gd4G',
+    { expiresIn: '3600' }
+  );
+  return token;
+};
+
+userSchema.methods.generateRefreshToken = function () {
+  const user = this;
   const token = jwt.sign(
     {
       _id: user._id,
     },
-    process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
-  )
-}
+    'i8sRE0kKjlUrbkEy1FeQFdLzcqzSU6A21iDTtPmqulub2s8HPIZmA9Gy4M2L8DR3V7BOpp4JzrK3QEyCl7OgaUHhF7a1zAQpDR9WuYJRvOAqLx7ktRI3DCcG',
+    { expiresIn: '36000' }
+  );
+  return token;
+};
 
-export const User = mongoose.model('User', userSchema)
+export const User = mongoose.model('User', userSchema);
