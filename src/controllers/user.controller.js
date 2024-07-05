@@ -60,7 +60,7 @@ const registerUser = async (req, res, next) => {
 
     const user = await User.create({
       fullName,
-      username: username.toLowerCase(),
+      username: username,
       email,
       password,
       role,
@@ -352,6 +352,32 @@ const updateCoverImage = async (req, res, next) => {
   ).select('-password')
 }
 
+const getUserStats = async (req, res, next) => {
+  try {
+    const stats = await User.aggregate([
+      { $match: { role: { $ne: 'admin' } } },
+      { 
+        $group: {
+          _id: "$role",  // Group by role field
+          count: { $sum: 1 }  // Count documents in each group
+        }
+      }
+    ])
+    res.status(200).json({
+      message: 'User stats generated successfully',
+      data: {
+        totalUsers: stats.length,
+        stats
+      },
+    })
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'An error occurred while getting user stats',
+    })
+  }
+}
+
 export {
   registerUser,
   loginUser,
@@ -362,4 +388,5 @@ export {
   updateAccount,
   updateProfileImg,
   updateCoverImage,
+  getUserStats,
 }

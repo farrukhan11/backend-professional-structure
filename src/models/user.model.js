@@ -41,6 +41,14 @@ const userSchema = new mongoose.Schema(
     coverImg: {
       type: String,
     },
+    price: {
+      type: Number,
+      default: 0,
+    },
+    rating: {
+      type: Number,
+      default: 0,
+    },
     refreshToken: {
       type: String,
     },
